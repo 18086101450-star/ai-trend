@@ -216,11 +216,7 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
                 scan_id = scan.id
                 scan_obj = await session.get(ScanRecord, scan_id)
 
-                result = await run_all_scrapers(
-                    settings.arxiv_max_results,
-                    settings.hf_papers_count,
-                    settings.techcrunch_articles,
-                )
+                result = await run_all_scrapers()
 
                 papers = result["papers"]
                 sources = result["sources"]
