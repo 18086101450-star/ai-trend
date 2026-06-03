@@ -10,7 +10,6 @@ let state = {
   stats: null,
   scanInProgress: false,
   categoryChart: null,
-  timelineChart: null,
   modalChart: null,
 };
 
@@ -53,7 +52,6 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     // lazy load charts on dashboard
     if (btn.dataset.view === 'dashboard') {
       loadCategoryChart();
-      loadTimelineChart();
     }
   });
 });
@@ -357,89 +355,6 @@ async function loadCategoryChart() {
   });
 }
 
-async function loadTimelineChart() {
-  const canvas = document.getElementById('timelineChart');
-  if (!canvas) return;
-
-  const data = await api('/trend-timeline');
-  if (!data?.timeline || data.timeline.length < 2) {
-    const msg = data?.timeline?.length === 1
-      ? 'Only 1 week of data so far. Run another scan next week to see trends.'
-      : 'No trend data yet. Run a scan to get started.';
-    canvas.parentElement.innerHTML =
-      `<div class="empty-chart"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>${msg}</p></div>`;
-    return;
-  }
-
-  if (state.timelineChart) { state.timelineChart.destroy(); }
-
-  const weeks = data.timeline.map(t => t.week.replace('W', '\nW'));
-  const counts = data.timeline.map(t => t.total_mentions);
-  const scores = data.timeline.map(t => t.avg_score);
-
-  const ctx = canvas.getContext('2d');
-  state.timelineChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: weeks,
-      datasets: [
-        {
-          label: 'Mentions',
-          data: counts,
-          backgroundColor: 'rgba(0,212,255,0.3)',
-          borderColor: '#00d4ff',
-          borderWidth: 1,
-          order: 2,
-        },
-        {
-          label: 'Avg Score',
-          data: scores,
-          type: 'line',
-          borderColor: '#7c3aed',
-          backgroundColor: 'rgba(124,58,237,0.1)',
-          borderWidth: 2,
-          pointRadius: 3,
-          pointBackgroundColor: '#7c3aed',
-          fill: true,
-          tension: 0.3,
-          order: 1,
-          yAxisID: 'y1',
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          position: 'top',
-          labels: { color: '#8888aa', font: { size: 11 }, boxWidth: 12, padding: 8 }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#555577', font: { size: 9 } },
-          grid: { color: 'rgba(255,255,255,0.03)' }
-        },
-        y: {
-          beginAtZero: true,
-          ticks: { color: '#555577', font: { size: 10 } },
-          grid: { color: 'rgba(255,255,255,0.03)' },
-          position: 'left',
-        },
-        y1: {
-          beginAtZero: true,
-          max: 1.0,
-          ticks: { color: '#555577', font: { size: 10 }, callback: v => v.toFixed(2) },
-          grid: { display: false },
-          position: 'right',
-        }
-      }
-    }
-  });
-}
-
 // ── Modal ──
 
 function openKeywordModal(kw) {
@@ -601,7 +516,6 @@ async function refreshAll() {
   ]);
   loadSourceFilter();
   loadCategoryChart();
-  loadTimelineChart();
   // reload the active view
   const activeView = document.querySelector('.nav-btn.active');
   if (activeView) {
