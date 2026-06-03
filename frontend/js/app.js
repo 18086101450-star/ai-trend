@@ -317,12 +317,27 @@ const CHART_COLORS = ['#00d4ff','#7c3aed','#22d3a7','#f59e0b','#ec4899','#ef4444
 
 async function loadCategoryChart() {
   const canvas = document.getElementById('categoryChart');
-  if (!canvas) return;
+  const wrap = canvas?.parentElement;
+  if (!canvas || !wrap) return;
+
+  let emptyEl = wrap.querySelector('.empty-chart');
+  if (!emptyEl) {
+    emptyEl = document.createElement('div');
+    emptyEl.className = 'empty-chart';
+    emptyEl.style.display = 'none';
+    wrap.appendChild(emptyEl);
+  }
+
   if (!state.categories?.length) {
-    canvas.parentElement.innerHTML =
-      '<div class="empty-chart"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>No keywords yet. Run a scan to see categories.</p></div>';
+    canvas.style.display = 'none';
+    emptyEl.style.display = 'flex';
+    emptyEl.innerHTML =
+      '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>No keywords yet. Run a scan to see categories.</p>';
     return;
   }
+
+  canvas.style.display = 'block';
+  emptyEl.style.display = 'none';
 
   const labels = state.categories.slice(0, 8).map(c => c.name);
   const data = state.categories.slice(0, 8).map(c => c.count);

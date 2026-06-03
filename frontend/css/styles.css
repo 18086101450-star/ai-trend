@@ -719,7 +719,7 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── CHARTS ── */
-.charts-section { padding-top: 0; }
+.charts-section { padding-top: 16px; }
 .charts-grid {
   max-width: 500px;
   margin: 0 auto;
