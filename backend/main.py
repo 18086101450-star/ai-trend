@@ -119,6 +119,16 @@ async def get_keywords(
     }
 
 
+@app.get("/api/keywords/name/{name}")
+async def get_keyword_by_name(name: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Keyword).where(sa_func.lower(Keyword.keyword) == name.lower()).limit(1)
+    )
+    kw = result.scalar_one_or_none()
+    if not kw:
+        raise HTTPException(status_code=404, detail="Keyword not found")
+    return kw.to_dict()
+
 @app.get("/api/keywords/{keyword_id}")
 async def get_keyword_detail(keyword_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Keyword).where(Keyword.id == keyword_id))

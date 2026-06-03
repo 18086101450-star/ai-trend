@@ -404,15 +404,14 @@ function openKeywordModal(kw) {
     // async fetch tooltips for uncached related keywords
     kw.related_keywords.forEach(async (name) => {
       if (getFromCache(name)) return;
-      const data = await api(`/keywords?search=${encodeURIComponent(name)}&limit=5`);
-      if (!data?.keywords) return;
-      data.keywords.forEach(addToCache);
-      const match = data.keywords.find(kw2 => kw2.keyword.toLowerCase() === name.toLowerCase());
-      if (match && match.meaning) {
+      const data = await api(`/keywords/name/${encodeURIComponent(name)}`);
+      if (!data) return;
+      addToCache(data);
+      if (data.meaning) {
         const tags = relatedContainer.querySelectorAll('.related-tag');
         tags.forEach(tag => {
           if (tag.textContent === name && !tag.hasAttribute('data-tooltip')) {
-            tag.setAttribute('data-tooltip', match.meaning || match.explanation || '');
+            tag.setAttribute('data-tooltip', data.meaning || data.explanation || '');
           }
         });
       }
