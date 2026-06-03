@@ -160,6 +160,19 @@ async def get_scans(limit: int = Query(10), db: AsyncSession = Depends(get_db)):
     return {"scans": [s.to_dict() for s in scans]}
 
 
+@app.get("/api/keywords/{keyword_id}/history")
+async def get_keyword_history(keyword_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Keyword).where(Keyword.id == keyword_id))
+    kw = result.scalar_one_or_none()
+    if not kw:
+        raise HTTPException(status_code=404, detail="Keyword not found")
+    wc = kw.weekly_counts or {}
+    timeline = []
+    for week in sorted(wc.keys()):
+        timeline.append({"week": week, "count": wc[week]})
+    return {"keyword": kw.keyword, "weekly_counts": wc, "timeline": timeline}
+
+
 @app.get("/api/categories")
 async def get_categories(db: AsyncSession = Depends(get_db)):
     result = await db.execute(

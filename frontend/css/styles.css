@@ -163,8 +163,20 @@ a:hover { text-decoration: underline; }
 
 /* ── MAIN ── */
 .main { padding-top: 64px; }
-.view { display: none; }
-.view.active { display: block; }
+.view {
+  display: none;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.view.active {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+.view.active.no-anim {
+  transition: none;
+}
 
 /* ── HERO ── */
 .hero {
@@ -461,6 +473,26 @@ a:hover { text-decoration: underline; }
   gap: 8px;
   flex-wrap: wrap;
 }
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--accent-green);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: var(--font);
+}
+.export-btn:hover {
+  border-color: var(--accent-green);
+  background: rgba(34,211,167,0.08);
+}
+
 .search-input, .filter-group select {
   padding: 8px 14px;
   border-radius: var(--radius-sm);
@@ -599,6 +631,13 @@ a:hover { text-decoration: underline; }
   line-height: 1.7;
   color: var(--text-secondary);
 }
+.modal-chart-wrap {
+  width: 100%;
+  height: 120px;
+  margin-top: 8px;
+}
+.modal-chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
 .related-tags {
   display: flex;
   flex-wrap: wrap;

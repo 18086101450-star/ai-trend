@@ -141,6 +141,10 @@
               <option value="newest">Newest</option>
               <option value="alphabetical">A-Z</option>
             </select>
+            <button class="export-btn" id="exportBtn" title="Export keywords as CSV">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export
+            </button>
           </div>
         </div>
         <div class="keyword-grid" id="allKeywords">
@@ -187,6 +191,10 @@
       <div class="modal-section">
         <h4>Application Scenarios</h4>
         <p id="modalApplication">Loading...</p>
+      </div>
+      <div class="modal-section" id="modalHistorySection">
+        <h4>Weekly Trend</h4>
+        <div class="modal-chart-wrap"><canvas id="modalTrendChart"></canvas></div>
       </div>
       <div class="modal-section" id="modalRelatedSection">
         <h4>Related Keywords</h4>

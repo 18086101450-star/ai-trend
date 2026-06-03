@@ -11,6 +11,7 @@ let state = {
   scanInProgress: false,
   categoryChart: null,
   timelineChart: null,
+  modalChart: null,
 };
 
 // ── API Helpers ──
@@ -37,8 +38,18 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
+    const prev = document.querySelector('.view.active');
+    const next = document.getElementById(`view-${btn.dataset.view}`);
+    if (prev) {
+      prev.classList.remove('active');
+      requestAnimationFrame(() => {
+        next.classList.add('no-anim');
+        next.classList.add('active');
+        requestAnimationFrame(() => next.classList.remove('no-anim'));
+      });
+    } else {
+      next.classList.add('active');
+    }
     // lazy load charts on dashboard
     if (btn.dataset.view === 'dashboard') {
       loadCategoryChart();
@@ -48,6 +59,16 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 
 // ── Scan Status ──
+
+function formatDuration(startISO, endISO) {
+  if (!startISO || !endISO) return '';
+  const s = new Date(startISO);
+  const e = new Date(endISO);
+  const min = Math.round((e - s) / 60000);
+  if (min < 1) return '<1m';
+  if (min < 60) return `${min}m`;
+  return `${Math.floor(min / 60)}h ${min % 60}m`;
+}
 
 function updateScanStatus(stats) {
   const el = document.getElementById('scanStatus');
@@ -60,8 +81,9 @@ function updateScanStatus(stats) {
   const ok = scan.status === 'completed';
   const time = scan.completed_at || scan.started_at;
   const label = time ? new Date(time).toLocaleDateString() : '';
-  el.innerHTML = `<span class="dot ${ok ? 'ok' : 'fail'}"></span> ${label}`;
-  el.title = scan.status === 'completed' ? `Last scan: ${time}` : `Scan status: ${scan.status}`;
+  const duration = scan.completed_at && scan.started_at ? formatDuration(scan.started_at, scan.completed_at) : '';
+  el.innerHTML = `<span class="dot ${ok ? 'ok' : 'fail'}"></span> ${label}${duration ? ` / ${duration}` : ''}`;
+  el.title = scan.status === 'completed' ? `Last scan: ${time} (took ${duration})` : `Scan status: ${scan.status}`;
 }
 
 // ── Load Categories ──
@@ -102,14 +124,26 @@ async function loadSourceFilter() {
 
 // ── Load Stats ──
 
+function animateCounter(el, target, duration = 800) {
+  const start = parseInt(el.textContent.replace(/,/g, '')) || 0;
+  const startTime = performance.now();
+  const step = (now) => {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + (target - start) * eased).toLocaleString();
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 async function loadStats() {
   const data = await api('/stats');
   if (!data) return;
   state.stats = data;
-  document.getElementById('statKeywords').textContent = data.total_keywords;
-  document.getElementById('statPredictions').textContent = data.total_predictions;
-  document.getElementById('statTrending').textContent = data.trending_keywords;
-  document.getElementById('statEmerging').textContent = data.emerging_keywords;
+  animateCounter(document.getElementById('statKeywords'), data.total_keywords);
+  animateCounter(document.getElementById('statPredictions'), data.total_predictions);
+  animateCounter(document.getElementById('statTrending'), data.trending_keywords);
+  animateCounter(document.getElementById('statEmerging'), data.emerging_keywords);
   updateScanStatus(data);
 }
 
@@ -405,7 +439,7 @@ function openKeywordModal(kw) {
   document.getElementById('modalCategory').textContent = kw.category;
   document.getElementById('modalTrend').textContent = `Trend Score: ${(kw.trend_score || 0).toFixed(3)}`;
   document.getElementById('modalFrequency').textContent = `Frequency: ${kw.frequency}`;
-  document.getElementById('modalSource').textContent = `Source: ${kw.source}`;
+  document.getElementById('modalSource').textContent = `Source: ${kw.source || 'unknown'}`;
   document.getElementById('modalExplanation').textContent = kw.explanation || 'No explanation available.';
   document.getElementById('modalMeaning').textContent = kw.meaning || 'No significance data available.';
   document.getElementById('modalApplication').textContent = kw.application || 'No application data available.';
@@ -421,7 +455,56 @@ function openKeywordModal(kw) {
     relatedSection.style.display = 'none';
   }
 
+  // load history chart
+  loadKeywordHistoryChart(kw.id);
+
   modal.classList.add('active');
+}
+
+async function loadKeywordHistoryChart(keywordId) {
+  const canvas = document.getElementById('modalTrendChart');
+  const section = document.getElementById('modalHistorySection');
+  if (!canvas || !section) return;
+
+  const data = await api(`/keywords/${keywordId}/history`);
+  if (!data?.timeline?.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  if (state.modalChart) { state.modalChart.destroy(); }
+
+  const weeks = data.timeline.map(t => t.week.replace('W', '\nW'));
+  const counts = data.timeline.map(t => t.count);
+
+  const ctx = canvas.getContext('2d');
+  state.modalChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: weeks,
+      datasets: [{
+        label: 'Mentions',
+        data: counts,
+        borderColor: '#00d4ff',
+        backgroundColor: 'rgba(0,212,255,0.15)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#00d4ff',
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#555577', font: { size: 9 } }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: '#555577', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } }
+      }
+    }
+  });
 }
 
 document.querySelector('.modal-close').addEventListener('click', () => {
@@ -541,8 +624,42 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAllPredictions();
   });
 
+  document.getElementById('exportBtn')?.addEventListener('click', exportKeywordsCSV);
+
   refreshAll();
 });
+
+// ── Export CSV ──
+
+async function exportKeywordsCSV() {
+  const data = await api('/keywords?sort=trend_score&limit=5000&offset=0');
+  if (!data?.keywords?.length) return;
+
+  const rows = [['Keyword','Category','Trend Score','Frequency','Source','Trending','Emerging','First Seen']];
+  data.keywords.forEach(k => {
+    rows.push([
+      k.keyword,
+      k.category,
+      (k.trend_score || 0).toFixed(4),
+      k.frequency,
+      k.source || '',
+      k.is_trending ? 'Yes' : 'No',
+      k.is_emerging ? 'Yes' : 'No',
+      k.first_seen ? new Date(k.first_seen).toISOString().split('T')[0] : '',
+    ]);
+  });
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ai-trends-keywords-${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // ── Utilities ──
 
