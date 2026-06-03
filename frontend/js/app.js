@@ -319,7 +319,12 @@ const CHART_COLORS = ['#00d4ff','#7c3aed','#22d3a7','#f59e0b','#ec4899','#ef4444
 
 async function loadCategoryChart() {
   const canvas = document.getElementById('categoryChart');
-  if (!canvas || !state.categories?.length) return;
+  if (!canvas) return;
+  if (!state.categories?.length) {
+    canvas.parentElement.innerHTML =
+      '<div class="empty-chart"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>No keywords yet. Run a scan to see categories.</p></div>';
+    return;
+  }
 
   const labels = state.categories.slice(0, 8).map(c => c.name);
   const data = state.categories.slice(0, 8).map(c => c.count);
@@ -357,8 +362,12 @@ async function loadTimelineChart() {
   if (!canvas) return;
 
   const data = await api('/trend-timeline');
-  if (!data?.timeline?.length) {
-    canvas.parentElement.innerHTML = '<div class="loading-spinner" style="padding:40px">Not enough data yet. Run a few scans to see trends.</div>';
+  if (!data?.timeline || data.timeline.length < 2) {
+    const msg = data?.timeline?.length === 1
+      ? 'Only 1 week of data so far. Run another scan next week to see trends.'
+      : 'No trend data yet. Run a scan to get started.';
+    canvas.parentElement.innerHTML =
+      `<div class="empty-chart"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>${msg}</p></div>`;
     return;
   }
 
