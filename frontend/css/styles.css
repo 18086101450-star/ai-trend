@@ -163,28 +163,7 @@ a:hover { text-decoration: underline; }
 .scan-btn:hover { background: rgba(0,212,255,0.15); box-shadow: 0 0 24px rgba(0,212,255,0.12); }
 .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .scan-btn.scanning {
-  animation: scanPulse 1.4s ease-in-out infinite;
   pointer-events: none;
-}
-.scan-btn.scanning::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: calc(var(--radius-sm) + 2px);
-  border: 1.5px solid transparent;
-  background: conic-gradient(transparent 0deg, var(--accent-cyan) 90deg, transparent 180deg, var(--accent-purple) 270deg, transparent 360deg) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: scanRotate 1.2s linear infinite;
-}
-@keyframes scanPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-@keyframes scanRotate {
-  to { transform: rotate(360deg); }
 }
 
 .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
