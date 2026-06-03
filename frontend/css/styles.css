@@ -875,3 +875,77 @@ a:hover { text-decoration: underline; }
   .nav-btn { padding: 4px 6px; }
   .header-content { gap: 4px; }
 }
+
+/* ── METHODOLOGY ── */
+.methodology-section { max-width: 1000px; margin: 0 auto; padding-top: 48px; }
+.methodology-header { text-align: center; margin-bottom: 48px; }
+.methodology-header h2 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 12px; background: var(--gradient-accent); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.methodology-desc { font-size: 15px; color: var(--text-secondary); max-width: 600px; margin: 0 auto; line-height: 1.7; }
+
+.methodology-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.methodology-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px;
+  transition: border-color 0.2s ease;
+}
+.methodology-card:hover { border-color: var(--border-hover); }
+.methodology-card-wide { grid-column: 1 / -1; }
+.methodology-card-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(0,212,255,0.08); display: flex; align-items: center; justify-content: center; color: var(--accent-cyan); margin-bottom: 16px; }
+.methodology-card h3 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+.methodology-card p, .methodology-card li { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+.methodology-card ul { list-style: none; padding: 0; margin: 12px 0 0; }
+.methodology-card li { padding: 4px 0 4px 20px; position: relative; }
+.methodology-card li::before { content: ''; position: absolute; left: 4px; top: 12px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-cyan); opacity: 0.5; }
+.methodology-card strong { color: var(--text-primary); }
+.methodology-card code { background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--accent-cyan); }
+
+.formula-table-wrap { overflow-x: auto; margin: 16px 0 12px; }
+.formula-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.formula-table th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+.formula-table td { padding: 10px 12px; color: var(--text-secondary); line-height: 1.6; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.formula-table td.weight { white-space: nowrap; color: var(--accent-cyan); font-weight: 600; text-align: center; }
+.formula-final { padding: 14px 18px; background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.1); border-radius: 8px; font-size: 13px; color: var(--text-secondary); text-align: center; }
+
+@media (max-width: 768px) {
+  .methodology-grid { grid-template-columns: 1fr; }
+  .methodology-header h2 { font-size: 22px; }
+  .methodology-card { padding: 20px; }
+}
+
+/* ── RELATED TAG TOOLTIP ── */
+.related-tag-wrap { position: relative; display: inline-block; }
+.related-tag[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a3a;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  white-space: normal;
+  max-width: 280px;
+  width: max-content;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  animation: tooltipIn 0.15s ease;
+}
+.related-tag[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border);
+  pointer-events: none;
+  z-index: 10;
+}
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

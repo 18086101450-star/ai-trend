@@ -1,4 +1,5 @@
 const API_BASE = '/api';
+const keywordCache = {};
 
 let state = {
   keywords: { page: 0, total: 0, items: [] },
@@ -12,6 +13,13 @@ let state = {
   categoryChart: null,
   modalChart: null,
 };
+
+function addToCache(kw) {
+  if (kw && kw.keyword) keywordCache[kw.keyword.toLowerCase()] = kw;
+}
+function getFromCache(name) {
+  return keywordCache[name.toLowerCase()];
+}
 
 // ── API Helpers ──
 
@@ -207,6 +215,7 @@ async function loadAllKeywords(page = 0) {
 // ── Render Keyword Card ──
 
 function renderKeywordCard(kw) {
+  addToCache(kw);
   const score = kw.trend_score || 0;
   const trendClass = score > 0.5 ? 'high' : score > 0.3 ? 'medium' : 'low';
 
@@ -387,9 +396,27 @@ function openKeywordModal(kw) {
   const relatedSection = document.getElementById('modalRelatedSection');
   if (kw.related_keywords && kw.related_keywords.length > 0) {
     relatedSection.style.display = 'block';
-    relatedContainer.innerHTML = kw.related_keywords.map(k =>
-      `<span class="related-tag">${escapeHtml(k)}</span>`
-    ).join('');
+    relatedContainer.innerHTML = kw.related_keywords.map(k => {
+      const cached = getFromCache(k);
+      const tip = cached ? (cached.meaning || cached.explanation || '') : '';
+      return `<span class="related-tag"${tip ? ` data-tooltip="${escapeHtml(tip)}"` : ''}>${escapeHtml(k)}</span>`;
+    }).join('');
+    // async fetch tooltips for uncached related keywords
+    kw.related_keywords.forEach(async (name) => {
+      if (getFromCache(name)) return;
+      const data = await api(`/keywords?search=${encodeURIComponent(name)}&limit=5`);
+      if (!data?.keywords) return;
+      data.keywords.forEach(addToCache);
+      const match = data.keywords.find(kw2 => kw2.keyword.toLowerCase() === name.toLowerCase());
+      if (match && match.meaning) {
+        const tags = relatedContainer.querySelectorAll('.related-tag');
+        tags.forEach(tag => {
+          if (tag.textContent === name && !tag.hasAttribute('data-tooltip')) {
+            tag.setAttribute('data-tooltip', match.meaning || match.explanation || '');
+          }
+        });
+      }
+    });
   } else {
     relatedSection.style.display = 'none';
   }
