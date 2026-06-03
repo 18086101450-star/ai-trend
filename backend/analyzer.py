@@ -2,8 +2,7 @@ import logging
 import re
 import math
 from collections import Counter, defaultdict
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import datetime, timezone
 
 
 logger = logging.getLogger(__name__)
@@ -288,33 +287,31 @@ GENERIC_WORDS = {
 }
 
 
+_CLEAN_RE = re.compile(r"[^a-z0-9\s\-_]")
+_SPACE_RE = re.compile(r"\s+")
+_TECH_BIGRAM_RE = re.compile("|".join(re.escape(b) for b in TECH_BIGRAMS), re.IGNORECASE)
+
+
 def extract_keywords(text: str) -> list[str]:
     text = text.lower()
-    text = re.sub(r"[^a-z0-9\s\-_]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    text = _CLEAN_RE.sub(" ", text)
+    text = _SPACE_RE.sub(" ", text).strip()
 
     tokens = text.split()
     filtered = []
+    seen = set()
     for t in tokens:
         t = t.strip("-_")
-        if len(t) < 3:
+        if len(t) < 3 or t.isdigit() or t in STOPWORDS or t in GENERIC_WORDS:
             continue
-        if t.isdigit():
-            continue
-        if t in STOPWORDS or t in GENERIC_WORDS:
-            continue
-        filtered.append(t)
+        if t not in seen:
+            seen.add(t)
+            filtered.append(t)
 
-    # extract technical bigrams first
-    bigram_keywords = set()
-    for bigram in TECH_BIGRAMS:
-        if bigram in text:
-            bigram_keywords.add(bigram)
+    # extract technical bigrams via compiled regex (single pass)
+    bigram_keywords = set(m.group(0).lower() for m in _TECH_BIGRAM_RE.finditer(text))
 
-    # extract unigram keywords
-    unigram_keywords = set(filtered)
-
-    return list(bigram_keywords | unigram_keywords)
+    return list(bigram_keywords) + filtered
 
 
 def categorize_keyword(keyword: str) -> str:
@@ -388,69 +385,55 @@ async def analyze_papers(papers: list[dict], db_session) -> dict:
     from sqlalchemy import select, func as sa_func
     import json
 
-    # extract keywords from all papers
-    keyword_paper_map = defaultdict(list)  # keyword -> list of paper info
-    category_map = defaultdict(set)  # keyword -> set of categories
+    # pre-extract keywords for ALL papers once (reuse for both mapping and co-occurrence)
+    paper_keywords: list[list[str]] = []
+    keyword_paper_map = defaultdict(list)
+    category_map: dict[str, Counter] = defaultdict(Counter)
 
     for paper in papers:
-        title_keywords = extract_keywords(paper["title"])
-        abstract_keywords = extract_keywords(paper["abstract"]) if paper.get("abstract") else []
-
-        all_kw = list(set(title_keywords + abstract_keywords))
+        kw = extract_keywords(paper["title"])
+        if paper.get("abstract"):
+            kw += extract_keywords(paper["abstract"])
+        pk = list(set(kw))
+        paper_keywords.append(pk)
         cat = paper.get("category", "AI")
-
-        for kw in all_kw:
-            keyword_paper_map[kw].append({
-                "title": paper["title"],
-                "source": paper["source"],
-                "source_url": paper["source_url"],
-                "category": cat,
-            })
-            category_map[kw].add(cat)
+        info = {"title": paper["title"], "source": paper["source"], "source_url": paper["source_url"], "category": cat}
+        for kw_name in pk:
+            if len(kw_name) < 3 or len(kw_name) > 80:
+                continue
+            keyword_paper_map[kw_name].append(info)
+            category_map[kw_name][cat] += 1
 
     # get existing keywords from db
     result = await db_session.execute(select(Keyword))
     existing_keywords = {k.keyword: k for k in result.scalars().all()}
 
-    # prepare weekly time tracking
     now = datetime.now(timezone.utc)
     current_week = now.isocalendar()
     week_key = f"{current_week[0]}-W{current_week[1]:02d}"
+    MIN_SCORE = 0.08
 
-    new_keywords = []
-    updated_keywords = []
-    all_scores = {}
+    new_keywords: list[Keyword] = []
+    updated_keywords: list[Keyword] = []
+    all_scores: dict[str, float] = {}
 
-    for kw, papers_list in keyword_paper_map.items():
-        if len(kw) < 3 or len(kw) > 80:
-            continue
-
+    for kw_name, papers_list in keyword_paper_map.items():
         recent_freq = len(papers_list)
         sources = set(p["source"] for p in papers_list)
-        categories = category_map[kw]
-        primary_cat = max(set(categories), key=list(categories).count) if categories else "General AI / Emerging"
-        is_bigram = kw in TECH_BIGRAMS or " " in kw.strip()
-
-        # determine if it's a bigram for scoring
-        is_bigram_kw = " " in kw.strip()
-
-        # get existing record
-        existing = existing_keywords.get(kw)
-
-        MIN_SCORE = 0.08  # minimum score to save a keyword
+        cat_counter = category_map[kw_name]
+        primary_cat = cat_counter.most_common(1)[0][0] if cat_counter else "General AI / Emerging"
+        is_bigram_kw = " " in kw_name.strip()
+        existing = existing_keywords.get(kw_name)
 
         if existing:
             prev_freq = existing.frequency
-            weekly = dict(existing.weekly_counts) if existing.weekly_counts else {}
+            weekly = existing.weekly_counts or {}
             prev_total = sum(v for k, v in weekly.items() if k != week_key)
-
             overall = recent_freq + prev_total
-            score = score_keyword(kw, overall_freq=overall, recent_freq=recent_freq,
+            score = score_keyword(kw_name, overall_freq=overall, recent_freq=recent_freq,
                                   prev_freq=max(prev_freq, 1), source_diversity=len(sources),
                                   total_papers=len(papers), is_bigram=is_bigram_kw)
-
             weekly[week_key] = weekly.get(week_key, 0) + recent_freq
-
             existing.frequency = prev_freq + recent_freq
             existing.trend_score = score
             existing.is_trending = score > 0.25 and overall > 3
@@ -460,67 +443,57 @@ async def analyze_papers(papers: list[dict], db_session) -> dict:
             if existing.category == "General" and primary_cat != "General":
                 existing.category = primary_cat
             updated_keywords.append(existing)
-            all_scores[kw] = score
+            all_scores[kw_name] = score
         else:
-            score = score_keyword(kw, overall_freq=recent_freq, recent_freq=recent_freq,
+            score = score_keyword(kw_name, overall_freq=recent_freq, recent_freq=recent_freq,
                                   prev_freq=0, source_diversity=len(sources),
                                   total_papers=len(papers), is_bigram=is_bigram_kw)
-
             if score < MIN_SCORE:
                 continue
-
-            explanation_data = AI_EXPLANATIONS.get(kw, get_default_explanation(kw))
-
+            explanation_data = AI_EXPLANATIONS.get(kw_name, get_default_explanation(kw_name))
             kw_obj = Keyword(
-                keyword=kw,
-                category=primary_cat,
-                explanation=explanation_data["explanation"],
-                meaning=explanation_data["meaning"],
-                application=explanation_data["application"],
-                source=",".join(sources),
-                frequency=recent_freq,
-                trend_score=score,
-                is_trending=score > 0.25 and recent_freq > 2,
-                is_emerging=True,
-                related_keywords=[],
-                weekly_counts={week_key: recent_freq},
+                keyword=kw_name, category=primary_cat,
+                explanation=explanation_data["explanation"], meaning=explanation_data["meaning"],
+                application=explanation_data["application"], source=",".join(sources),
+                frequency=recent_freq, trend_score=score,
+                is_trending=score > 0.25 and recent_freq > 2, is_emerging=True,
+                related_keywords=[], weekly_counts={week_key: recent_freq},
             )
             new_keywords.append(kw_obj)
-            all_scores[kw] = score
+            all_scores[kw_name] = score
 
-    # persist to database
+    # batch persist (single flush, no individual refreshes)
     for kw in new_keywords:
         db_session.add(kw)
     for kw in updated_keywords:
         db_session.add(kw)
     await db_session.flush()
 
-    # refresh to get IDs
+    # build id mapping from in-memory objects
+    all_kw_objects = {}
     for kw in new_keywords:
-        await db_session.refresh(kw)
+        all_kw_objects[kw.keyword] = kw
     for kw in updated_keywords:
-        await db_session.refresh(kw)
+        all_kw_objects[kw.keyword] = kw
 
-    # build related keywords using co-occurrence
-    all_kw_objects = {k.keyword: k for k in new_keywords + updated_keywords}
+    # build related keywords using co-occurrence (reuse pre-extracted paper_keywords)
     if all_kw_objects:
-        # simple co-occurrence: keywords appearing from same papers
         keyword_cooc = defaultdict(Counter)
-        for paper in papers:
-            pk = set(extract_keywords(paper["title"]) + extract_keywords(paper.get("abstract", "")))
-            pk = {k for k in pk if k in all_kw_objects and len(k) >= 3}
-            for k1 in pk:
-                for k2 in pk:
-                    if k1 < k2:
-                        keyword_cooc[k1][k2] += 1
-                        keyword_cooc[k2][k1] += 1
+        for pk in paper_keywords:
+            pk_set = {k for k in pk if k in all_kw_objects}
+            pk_list = list(pk_set)
+            n = len(pk_list)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    k1, k2 = pk_list[i], pk_list[j]
+                    keyword_cooc[k1][k2] += 1
+                    keyword_cooc[k2][k1] += 1
 
         for kw_name, kw_obj in all_kw_objects.items():
             related = [k for k, c in keyword_cooc.get(kw_name, Counter()).most_common(5) if c > 0]
             if related:
                 kw_obj.related_keywords = related
 
-    # generate trend predictions
     predictions = await generate_predictions(all_scores, keyword_paper_map, db_session)
 
     return {
