@@ -9,6 +9,8 @@ let state = {
   categories: [],
   stats: null,
   scanInProgress: false,
+  categoryChart: null,
+  timelineChart: null,
 };
 
 // ── API Helpers ──
@@ -37,8 +39,30 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.classList.add('active');
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
+    // lazy load charts on dashboard
+    if (btn.dataset.view === 'dashboard') {
+      loadCategoryChart();
+      loadTimelineChart();
+    }
   });
 });
+
+// ── Scan Status ──
+
+function updateScanStatus(stats) {
+  const el = document.getElementById('scanStatus');
+  if (!el) return;
+  const scan = stats?.last_scan;
+  if (!scan) {
+    el.innerHTML = '<span class="dot none"></span> No scans yet';
+    return;
+  }
+  const ok = scan.status === 'completed';
+  const time = scan.completed_at || scan.started_at;
+  const label = time ? new Date(time).toLocaleDateString() : '';
+  el.innerHTML = `<span class="dot ${ok ? 'ok' : 'fail'}"></span> ${label}`;
+  el.title = scan.status === 'completed' ? `Last scan: ${time}` : `Scan status: ${scan.status}`;
+}
 
 // ── Load Categories ──
 
@@ -60,6 +84,22 @@ async function loadCategories() {
   });
 }
 
+// ── Load Sources for filter ──
+
+async function loadSourceFilter() {
+  const data = state.stats;
+  if (!data?.sources_available) return;
+  const sel = document.getElementById('keywordSourceFilter');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">All Sources</option>';
+  data.sources_available.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+    sel.appendChild(opt);
+  });
+}
+
 // ── Load Stats ──
 
 async function loadStats() {
@@ -70,6 +110,7 @@ async function loadStats() {
   document.getElementById('statPredictions').textContent = data.total_predictions;
   document.getElementById('statTrending').textContent = data.trending_keywords;
   document.getElementById('statEmerging').textContent = data.emerging_keywords;
+  updateScanStatus(data);
 }
 
 // ── Load Trending Keywords ──
@@ -108,11 +149,12 @@ async function loadAllPredictions() {
   renderPredictions('allPredictions', data.predictions);
 }
 
-// ── Load All Keywords (with pagination) ──
+// ── Load All Keywords (with pagination & source filter) ──
 
 async function loadAllKeywords(page = 0) {
   const search = document.getElementById('keywordSearch')?.value || '';
   const cat = document.getElementById('keywordCategoryFilter')?.value || '';
+  const source = document.getElementById('keywordSourceFilter')?.value || '';
   const sort = document.getElementById('keywordSort')?.value || 'trend_score';
   const limit = 24;
   const offset = page * limit;
@@ -120,13 +162,14 @@ async function loadAllKeywords(page = 0) {
   let url = `/keywords?sort=${sort}&limit=${limit}&offset=${offset}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
   if (cat) url += `&category=${encodeURIComponent(cat)}`;
+  if (source) url += `&source=${encodeURIComponent(source)}`;
 
   const data = await api(url);
   if (!data) return;
 
   state.keywords = { page, total: data.total, items: data.keywords };
   renderKeywordGrid('allKeywords', data.keywords);
-  renderPagination('keywordPagination', page, Math.ceil(data.total / limit), loadAllKeywords);
+  renderPagination('keywordPagination', page, Math.ceil(data.total / limit));
 }
 
 // ── Render Keyword Card ──
@@ -134,7 +177,6 @@ async function loadAllKeywords(page = 0) {
 function renderKeywordCard(kw) {
   const score = kw.trend_score || 0;
   const trendClass = score > 0.5 ? 'high' : score > 0.3 ? 'medium' : 'low';
-  const isUp = score > 0.3;
 
   const card = document.createElement('div');
   card.className = 'keyword-card';
@@ -210,7 +252,7 @@ function renderPredictions(containerId, predictions) {
 
 // ── Pagination ──
 
-function renderPagination(containerId, currentPage, totalPages, loadFn) {
+function renderPagination(containerId, currentPage, totalPages) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (totalPages <= 1) { container.innerHTML = ''; return; }
@@ -234,7 +276,125 @@ function renderPagination(containerId, currentPage, totalPages, loadFn) {
   html += `<button ${currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="window.paginateTo(${currentPage + 1})">Next</button>`;
 
   container.innerHTML = html;
-  window.paginateTo = (page) => loadFn(page);
+  window.paginateTo = (page) => loadAllKeywords(page);
+}
+
+// ── Charts ──
+
+const CHART_COLORS = ['#00d4ff','#7c3aed','#22d3a7','#f59e0b','#ec4899','#ef4444','#06b6d4','#a855f7','#34d399','#f97316'];
+
+async function loadCategoryChart() {
+  const canvas = document.getElementById('categoryChart');
+  if (!canvas || !state.categories?.length) return;
+
+  const labels = state.categories.slice(0, 8).map(c => c.name);
+  const data = state.categories.slice(0, 8).map(c => c.count);
+
+  if (state.categoryChart) { state.categoryChart.destroy(); }
+
+  const ctx = canvas.getContext('2d');
+  state.categoryChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: CHART_COLORS.slice(0, labels.length),
+        borderColor: 'rgba(8,8,24,0.8)',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: '#8888aa', font: { size: 11 }, padding: 12, boxWidth: 12 }
+        }
+      },
+      cutout: '60%',
+    }
+  });
+}
+
+async function loadTimelineChart() {
+  const canvas = document.getElementById('timelineChart');
+  if (!canvas) return;
+
+  const data = await api('/trend-timeline');
+  if (!data?.timeline?.length) {
+    canvas.parentElement.innerHTML = '<div class="loading-spinner" style="padding:40px">Not enough data yet. Run a few scans to see trends.</div>';
+    return;
+  }
+
+  if (state.timelineChart) { state.timelineChart.destroy(); }
+
+  const weeks = data.timeline.map(t => t.week.replace('W', '\nW'));
+  const counts = data.timeline.map(t => t.total_mentions);
+  const scores = data.timeline.map(t => t.avg_score);
+
+  const ctx = canvas.getContext('2d');
+  state.timelineChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: weeks,
+      datasets: [
+        {
+          label: 'Mentions',
+          data: counts,
+          backgroundColor: 'rgba(0,212,255,0.3)',
+          borderColor: '#00d4ff',
+          borderWidth: 1,
+          order: 2,
+        },
+        {
+          label: 'Avg Score',
+          data: scores,
+          type: 'line',
+          borderColor: '#7c3aed',
+          backgroundColor: 'rgba(124,58,237,0.1)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#7c3aed',
+          fill: true,
+          tension: 0.3,
+          order: 1,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#8888aa', font: { size: 11 }, boxWidth: 12, padding: 8 }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#555577', font: { size: 9 } },
+          grid: { color: 'rgba(255,255,255,0.03)' }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#555577', font: { size: 10 } },
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          position: 'left',
+        },
+        y1: {
+          beginAtZero: true,
+          max: 1.0,
+          ticks: { color: '#555577', font: { size: 10 }, callback: v => v.toFixed(2) },
+          grid: { display: false },
+          position: 'right',
+        }
+      }
+    }
+  });
 }
 
 // ── Modal ──
@@ -289,7 +449,6 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
   try {
     const result = await api('/scan', 'POST');
     if (result && result.scan_id) {
-      // poll for completion
       pollScanStatus(result.scan_id);
     } else {
       alert('Failed to start scan. The server may already be scanning.');
@@ -306,7 +465,7 @@ async function pollScanStatus(scanId) {
   const maxAttempts = 60;
   const poll = async () => {
     attempts++;
-    const data = await api(`/scans?limit=1`);
+    const data = await api('/scans?limit=1');
     if (data && data.scans && data.scans[0]) {
       const scan = data.scans[0];
       if (scan.status === 'completed') {
@@ -316,7 +475,7 @@ async function pollScanStatus(scanId) {
       }
       if (scan.status === 'failed') {
         resetScanBtn();
-        alert(`Scan failed: ${scan.error || 'Unknown error'}`);
+        alert('Scan failed: ' + (scan.error || 'Unknown error'));
         return;
       }
     }
@@ -335,7 +494,7 @@ function resetScanBtn() {
   state.scanInProgress = false;
   btn.disabled = false;
   btn.classList.remove('scanning');
-  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Scan Now';
+  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>Scan Now</span>';
 }
 
 // ── Refresh All ──
@@ -348,6 +507,9 @@ async function refreshAll() {
     loadLatestPredictions(),
     loadCategories(),
   ]);
+  loadSourceFilter();
+  loadCategoryChart();
+  loadTimelineChart();
   // reload the active view
   const activeView = document.querySelector('.nav-btn.active');
   if (activeView) {
@@ -360,7 +522,6 @@ async function refreshAll() {
 // ── Filter Events ──
 
 document.addEventListener('DOMContentLoaded', () => {
-  // keyword search with debounce
   let searchTimeout;
   document.getElementById('keywordSearch')?.addEventListener('input', () => {
     clearTimeout(searchTimeout);
@@ -370,6 +531,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('keywordCategoryFilter')?.addEventListener('change', () => {
     loadAllKeywords(0);
   });
+  document.getElementById('keywordSourceFilter')?.addEventListener('change', () => {
+    loadAllKeywords(0);
+  });
   document.getElementById('keywordSort')?.addEventListener('change', () => {
     loadAllKeywords(0);
   });
@@ -377,7 +541,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAllPredictions();
   });
 
-  // initial load
   refreshAll();
 });
 

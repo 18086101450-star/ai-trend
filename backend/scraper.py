@@ -154,15 +154,66 @@ async def scrape_techcrunch_ai(articles_count: int = 20) -> list[dict]:
     return results
 
 
+async def scrape_github_trending(count: int = 15) -> list[dict]:
+    connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        html = await fetch_url(session, "https://github.com/trending?since=weekly")
+
+    if not html:
+        logger.warning("GitHub trending returned no data")
+        return []
+
+    soup = BeautifulSoup(html, "lxml")
+    articles = soup.select("article.Box-row")
+    results, seen = [], set()
+
+    for article in articles[:count]:
+        try:
+            h2 = article.select_one("h2")
+            if not h2:
+                continue
+            link = h2.select_one("a")
+            if not link:
+                continue
+            full_name = link.get("href", "").strip("/")
+            if not full_name or full_name in seen:
+                continue
+            seen.add(full_name)
+
+            desc_el = article.select_one("p")
+            description = desc_el.get_text(strip=True) if desc_el else ""
+
+            lang_el = article.select_one("[itemprop='programmingLanguage']")
+            language = lang_el.get_text(strip=True) if lang_el else ""
+
+            stars_el = article.select_one(".d-inline-block.float-sm-right")
+            stars = stars_el.get_text(strip=True).strip() if stars_el else "0"
+
+            results.append({
+                "title": full_name,
+                "abstract": f"{description} [{language}] ★{stars}" if language else f"{description} ★{stars}",
+                "category": "ML Systems / Efficiency",
+                "source": "github",
+                "source_url": f"https://github.com/{full_name}",
+                "published": datetime.now(timezone.utc),
+            })
+        except Exception:
+            continue
+
+    logger.info(f"GitHub: {len(results)} trending repos")
+    return results
+
+
 async def run_all_scrapers() -> dict:
     arxiv_task = scrape_arxiv(100)
     hf_task = scrape_huggingface_papers(30)
     tc_task = scrape_techcrunch_ai(20)
+    gh_task = scrape_github_trending(15)
 
-    results = await asyncio.gather(arxiv_task, hf_task, tc_task, return_exceptions=True)
+    results = await asyncio.gather(arxiv_task, hf_task, tc_task, gh_task, return_exceptions=True)
 
     papers, sources_scanned = [], []
-    for name, result in zip(["arxiv", "huggingface", "techcrunch"], results):
+    for name, result in zip(["arxiv", "huggingface", "techcrunch", "github"], results):
         if isinstance(result, Exception):
             logger.error(f"{name} failed: {result}")
         elif result:

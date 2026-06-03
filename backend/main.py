@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from collections import defaultdict
 from sqlalchemy import select, desc, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,6 +78,7 @@ async def api_status(db: AsyncSession = Depends(get_db)):
 async def get_keywords(
     category: str = Query(None),
     search: str = Query(None),
+    source: str = Query(None),
     trending: bool = Query(None),
     emerging: bool = Query(None),
     sort: str = Query("trend_score"),
@@ -90,6 +92,8 @@ async def get_keywords(
         query = query.where(Keyword.category.ilike(f"%{category}%"))
     if search:
         query = query.where(Keyword.keyword.ilike(f"%{search}%"))
+    if source:
+        query = query.where(Keyword.source.ilike(f"%{source}%"))
     if trending:
         query = query.where(Keyword.is_trending == True)
     if emerging:
@@ -191,9 +195,34 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "trending_keywords": trending_kw or 0,
         "emerging_keywords": emerging_kw or 0,
         "average_trend_score": round(float(avg_score), 4),
-        "sources_available": ["arxiv", "huggingface", "techcrunch"],
+        "sources_available": ["arxiv", "huggingface", "techcrunch", "github"],
         "last_scan": last_scan.to_dict() if last_scan else None,
     }
+
+
+@app.get("/api/trend-timeline")
+async def get_trend_timeline(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Keyword.weekly_counts, Keyword.trend_score, Keyword.keyword))
+    rows = result.all()
+
+    weekly_agg = defaultdict(lambda: {"count": 0, "score_sum": 0.0, "keywords": set()})
+    for row in rows:
+        wc = row.weekly_counts or {}
+        for week, count in wc.items():
+            weekly_agg[week]["count"] += count
+            weekly_agg[week]["score_sum"] += row.trend_score or 0
+            weekly_agg[week]["keywords"].add(row.keyword)
+
+    timeline = []
+    for week in sorted(weekly_agg.keys()):
+        agg = weekly_agg[week]
+        timeline.append({
+            "week": week,
+            "keyword_count": len(agg["keywords"]),
+            "total_mentions": agg["count"],
+            "avg_score": round(agg["score_sum"] / max(len(agg["keywords"]), 1), 4),
+        })
+    return {"timeline": timeline}
 
 
 @app.post("/api/scan")
