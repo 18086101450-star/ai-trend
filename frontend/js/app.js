@@ -396,26 +396,9 @@ function openKeywordModal(kw) {
   const relatedSection = document.getElementById('modalRelatedSection');
   if (kw.related_keywords && kw.related_keywords.length > 0) {
     relatedSection.style.display = 'block';
-    relatedContainer.innerHTML = kw.related_keywords.map(k => {
-      const cached = getFromCache(k);
-      const tip = cached ? (cached.meaning || cached.explanation || '') : '';
-      return `<span class="related-tag"${tip ? ` data-tooltip="${escapeHtml(tip)}"` : ''}>${escapeHtml(k)}</span>`;
-    }).join('');
-    // async fetch tooltips for uncached related keywords
-    kw.related_keywords.forEach(async (name) => {
-      if (getFromCache(name)) return;
-      const data = await api(`/keywords/name/${encodeURIComponent(name)}`);
-      if (!data) return;
-      addToCache(data);
-      if (data.meaning) {
-        const tags = relatedContainer.querySelectorAll('.related-tag');
-        tags.forEach(tag => {
-          if (tag.textContent === name && !tag.hasAttribute('data-tooltip')) {
-            tag.setAttribute('data-tooltip', data.meaning || data.explanation || '');
-          }
-        });
-      }
-    });
+    relatedContainer.innerHTML = kw.related_keywords.map(k =>
+      `<a class="related-tag" href="https://www.google.com/search?q=${encodeURIComponent(k + ' AI 2026')}" target="_blank" rel="noopener">${escapeHtml(k)}</a>`
+    ).join('');
   } else {
     relatedSection.style.display = 'none';
   }

@@ -704,6 +704,7 @@ a:hover { text-decoration: underline; }
   gap: 8px;
 }
 .related-tag {
+  display: inline-block;
   padding: 4px 14px;
   border-radius: 16px;
   font-size: 13px;
@@ -712,10 +713,13 @@ a:hover { text-decoration: underline; }
   border: 1px solid rgba(0,212,255,0.15);
   cursor: pointer;
   transition: var(--transition);
+  text-decoration: none;
 }
 .related-tag:hover {
   background: rgba(0,212,255,0.15);
   box-shadow: 0 0 12px rgba(0,212,255,0.06);
+  text-decoration: none;
+  color: var(--accent-cyan);
 }
 
 /* ── CHARTS ── */
@@ -911,41 +915,4 @@ a:hover { text-decoration: underline; }
   .methodology-card { padding: 20px; }
 }
 
-/* ── RELATED TAG TOOLTIP ── */
-.related-tag-wrap { position: relative; display: inline-block; }
-.related-tag[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1a1a3a;
-  color: var(--text-primary);
-  font-size: 12px;
-  line-height: 1.4;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  white-space: normal;
-  max-width: 280px;
-  width: max-content;
-  pointer-events: none;
-  z-index: 10;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  animation: tooltipIn 0.15s ease;
-}
-.related-tag[data-tooltip]:hover::before {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: var(--border);
-  pointer-events: none;
-  z-index: 10;
-}
-@keyframes tooltipIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
+
