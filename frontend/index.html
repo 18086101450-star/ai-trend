@@ -65,11 +65,23 @@
         <div class="charts-grid">
           <div class="chart-card">
             <h3>Category Distribution</h3>
-            <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+            <div class="chart-wrap" id="categoryChartWrap">
+              <canvas id="categoryChart"></canvas>
+              <div class="empty-chart" id="categoryChartEmpty" style="display:none">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <p id="categoryChartEmptyMsg">No keywords yet. Run a scan to see categories.</p>
+              </div>
+            </div>
           </div>
           <div class="chart-card">
             <h3>Trend Timeline</h3>
-            <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+            <div class="chart-wrap" id="timelineChartWrap">
+              <canvas id="timelineChart"></canvas>
+              <div class="empty-chart" id="timelineChartEmpty" style="display:none">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <p id="timelineChartEmptyMsg">No trend data yet. Run a scan to get started.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>

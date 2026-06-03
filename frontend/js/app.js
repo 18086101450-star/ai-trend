@@ -319,12 +319,18 @@ const CHART_COLORS = ['#00d4ff','#7c3aed','#22d3a7','#f59e0b','#ec4899','#ef4444
 
 async function loadCategoryChart() {
   const canvas = document.getElementById('categoryChart');
-  if (!canvas) return;
+  const empty = document.getElementById('categoryChartEmpty');
+  const emptyMsg = document.getElementById('categoryChartEmptyMsg');
+  if (!canvas || !empty) return;
+
   if (!state.categories?.length) {
-    canvas.parentElement.innerHTML =
-      '<div class="empty-chart"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>No keywords yet. Run a scan to see categories.</p></div>';
+    canvas.style.display = 'none';
+    empty.style.display = 'flex';
+    emptyMsg.textContent = 'No keywords yet. Run a scan to see categories.';
     return;
   }
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
 
   const labels = state.categories.slice(0, 8).map(c => c.name);
   const data = state.categories.slice(0, 8).map(c => c.count);
@@ -359,17 +365,19 @@ async function loadCategoryChart() {
 
 async function loadTimelineChart() {
   const canvas = document.getElementById('timelineChart');
-  if (!canvas) return;
+  const empty = document.getElementById('timelineChartEmpty');
+  const emptyMsg = document.getElementById('timelineChartEmptyMsg');
+  if (!canvas || !empty) return;
 
   const data = await api('/trend-timeline');
-  if (!data?.timeline || data.timeline.length < 2) {
-    const msg = data?.timeline?.length === 1
-      ? 'Only 1 week of data so far. Run another scan next week to see trends.'
-      : 'No trend data yet. Run a scan to get started.';
-    canvas.parentElement.innerHTML =
-      `<div class="empty-chart"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>${msg}</p></div>`;
+  if (!data?.timeline || data.timeline.length < 1) {
+    canvas.style.display = 'none';
+    empty.style.display = 'flex';
+    emptyMsg.textContent = 'No trend data yet. Run a scan to get started.';
     return;
   }
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
 
   if (state.timelineChart) { state.timelineChart.destroy(); }
 
